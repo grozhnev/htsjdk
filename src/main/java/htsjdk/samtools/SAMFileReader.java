@@ -660,7 +660,9 @@ public class SAMFileReader implements SamReader, SamReader.Indexing {
                 }
             } else if (BlockCompressedInputStream.isValidFile(bufferedStream)) {
                 mIsBinary = false;
-                mReader = new SAMTextReader(new BlockCompressedInputStream(bufferedStream), validationStringency, this.samRecordFactory);
+                mReader = new SAMTextReader(
+                		useAsyncIO ? new AsyncBlockCompressedInputStream(bufferedStream) : new BlockCompressedInputStream(bufferedStream),
+        				validationStringency, this.samRecordFactory);
             } else if (SamStreams.isGzippedSAMFile(bufferedStream)) {
                 mIsBinary = false;
                 mReader = new SAMTextReader(new GZIPInputStream(bufferedStream), validationStringency, this.samRecordFactory);
