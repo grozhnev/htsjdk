@@ -32,9 +32,9 @@ import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Supplier;
 
 import htsjdk.samtools.Defaults;
@@ -56,7 +56,7 @@ public class AsyncBlockCompressedInputStream
 	private final BlockingQueue<byte[]> freeBuffers = new ArrayBlockingQueue<>(
 			READ_AHEAD_BUFFERS);
 
-	private BlockingQueue<CompletableFuture<DecompressedBlock>> mResult = new ArrayBlockingQueue<>(
+	private Queue<CompletableFuture<DecompressedBlock>> mResult = new LinkedBlockingQueue<>(
 			READ_AHEAD_BUFFERS);
 
 	public AsyncBlockCompressedInputStream(final InputStream stream) {
@@ -90,14 +90,15 @@ public class AsyncBlockCompressedInputStream
 	SerialExecutor service = new SerialExecutor(ForkJoinPool.commonPool());
 
 	Runnable orderNextBlock = () -> {
-		synchronized (mResult) {
-			mResult.offer(CompletableFuture.supplyAsync(fetchNextBlock, service));
+		synchronized (service) {
+			mResult.offer(
+					CompletableFuture.supplyAsync(fetchNextBlock, service));
 		}
 	};
 
 	@Override
 	protected void prepareForSeek() {
-		synchronized (mResult) {
+		synchronized (service) {
 			mResult.clear();
 			service.clear();
 			super.prepareForSeek();
@@ -112,13 +113,18 @@ public class AsyncBlockCompressedInputStream
 			orderNextBlock.run();
 		}
 
-		try {
-			nextBlockFuture.thenRunAsync(orderNextBlock, service);
-			return nextBlockFuture.get();
-		} catch (InterruptedException | ExecutionException e) {
-			return new DecompressedBlock(0, 0, e);
-		}
+		nextBlockFuture.thenRunAsync(orderNextBlock, service);
+		return nextBlockFuture.join();
 
+	}
+
+	@Override
+	public void close() throws IOException {
+		synchronized (service) {
+			mResult.clear();
+			service.clear();
+			super.close();
+		}
 	}
 
 }
