@@ -56,7 +56,7 @@ public class AsyncBlockCompressedInputStream
 	private final BlockingQueue<byte[]> freeBuffers = new ArrayBlockingQueue<>(
 			READ_AHEAD_BUFFERS);
 
-	private Queue<CompletableFuture<DecompressedBlock>> mResult = new LinkedBlockingQueue<>(
+	private BlockingQueue<CompletableFuture<DecompressedBlock>> mResult = new ArrayBlockingQueue<>(
 			READ_AHEAD_BUFFERS);
 
 	public AsyncBlockCompressedInputStream(final InputStream stream) {
