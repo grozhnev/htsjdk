@@ -23,20 +23,22 @@
  */
 package htsjdk.samtools.util;
 
-import htsjdk.samtools.Defaults;
-import htsjdk.samtools.seekablestream.SeekableStream;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.ArrayDeque;
+import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ForkJoinPool;
+import java.util.function.Supplier;
+
+import htsjdk.samtools.Defaults;
+import htsjdk.samtools.seekablestream.SeekableStream;
 
 /**
  * Asynchronous read-ahead implementation of
@@ -50,27 +52,12 @@ public class AsyncBlockCompressedInputStream
 	private static final int READ_AHEAD_BUFFERS = (int) Math
 			.ceil(Defaults.NON_ZERO_BUFFER_SIZE
 					/ BlockCompressedStreamConstants.MAX_COMPRESSED_BLOCK_SIZE);
-	private static final Executor threadpool = Executors.newFixedThreadPool(1,
-			new ThreadFactory() {
-				public Thread newThread(Runnable r) {
-					Thread t = Executors.defaultThreadFactory().newThread(r);
-					t.setDaemon(true);
-					return t;
-				}
-			});
-	
+
 	private final BlockingQueue<byte[]> freeBuffers = new ArrayBlockingQueue<>(
 			READ_AHEAD_BUFFERS);
-	/**
-	 * Indicates whether a read-ahead task has been scheduled to run. Only one
-	 * read-ahead task per stream can be scheduled at any one time.
-	 */
-	private final Semaphore running = new Semaphore(READ_AHEAD_BUFFERS);
-	private CompletableFuture<DecompressedBlock> lastCall;
-	/**
-	 * Indicates whether any scheduled task should abort processing and
-	 * terminate as soon as possible since the result will be discarded anyway.
-	 */
+
+	private BlockingQueue<CompletableFuture<DecompressedBlock>> mResult = new ArrayBlockingQueue<>(
+			READ_AHEAD_BUFFERS);
 
 	public AsyncBlockCompressedInputStream(final InputStream stream) {
 		super(stream, true);
@@ -96,19 +83,78 @@ public class AsyncBlockCompressedInputStream
 		return nextBlockSync();
 	}
 
-	private DecompressedBlock nextBlockSync() {
-		
-		if (lastCall == null) {
-			lastCall = new CompletableFuture<DecompressedBlock>();
+	Supplier<DecompressedBlock> fetchNextBlock = () -> {
+		return processNextBlock(freeBuffers.poll());
+	};
+
+	SerialExecutor service = new SerialExecutor(ForkJoinPool.commonPool());
+
+	Runnable orderNextBlock = () -> {
+		synchronized (mResult) {
+			mResult.offer(CompletableFuture.supplyAsync(fetchNextBlock, service));
 		}
-		
-		CompletableFuture<DecompressedBlock> prevCall = lastCall;
-		
-		lastCall = lastCall.thenSupplyAsync(freeBuffers::poll, threadpool)
-				.thenApplyAsync(this::processNextBlock, threadpool);
-		
-		return prevCall.join();
+	};
+
+	@Override
+	protected void prepareForSeek() {
+		synchronized (mResult) {
+			mResult.clear();
+			service.clear();
+			super.prepareForSeek();
+		}
+	}
+
+	private DecompressedBlock nextBlockSync() {
+
+		CompletableFuture<DecompressedBlock> nextBlockFuture;
+
+		while ((nextBlockFuture = mResult.poll()) == null) {
+			orderNextBlock.run();
+		}
+
+		try {
+			nextBlockFuture.thenRunAsync(orderNextBlock, service);
+			return nextBlockFuture.get();
+		} catch (InterruptedException | ExecutionException e) {
+			return new DecompressedBlock(0, 0, e);
+		}
 
 	}
 
+}
+
+class SerialExecutor implements Executor {
+	final Queue<Runnable> tasks = new ArrayDeque<Runnable>();
+	final Executor executor;
+	Runnable active;
+
+	SerialExecutor(Executor executor) {
+		this.executor = executor;
+	}
+
+	public synchronized void execute(final Runnable r) {
+		tasks.offer(new Runnable() {
+			public void run() {
+				try {
+					r.run();
+				} finally {
+					scheduleNext();
+				}
+			}
+		});
+		if (active == null) {
+			scheduleNext();
+		}
+	}
+
+	synchronized public void clear() {
+		tasks.clear();
+		active = null;
+	}
+
+	protected synchronized void scheduleNext() {
+		if ((active = tasks.poll()) != null) {
+			executor.execute(active);
+		}
+	}
 }
