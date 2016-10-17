@@ -27,12 +27,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.ArrayDeque;
-import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Supplier;
 
@@ -126,40 +123,4 @@ public class AsyncBlockCompressedInputStream
 		}
 	}
 
-}
-
-class SerialExecutor implements Executor {
-	final Queue<Runnable> tasks = new ArrayDeque<Runnable>();
-	final Executor executor;
-	Runnable active;
-
-	SerialExecutor(Executor executor) {
-		this.executor = executor;
-	}
-
-	public synchronized void execute(final Runnable r) {
-		tasks.offer(new Runnable() {
-			public void run() {
-				try {
-					r.run();
-				} finally {
-					scheduleNext();
-				}
-			}
-		});
-		if (active == null) {
-			scheduleNext();
-		}
-	}
-
-	synchronized public void clear() {
-		tasks.clear();
-		active = null;
-	}
-
-	protected synchronized void scheduleNext() {
-		if ((active = tasks.poll()) != null) {
-			executor.execute(active);
-		}
-	}
 }
