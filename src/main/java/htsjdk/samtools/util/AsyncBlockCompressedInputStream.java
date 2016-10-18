@@ -111,8 +111,11 @@ public class AsyncBlockCompressedInputStream
 			}
 		}
 
-		nextBlockFuture.thenRunAsync(orderNextBlock, service);
-		return nextBlockFuture.join();
+		DecompressedBlock block =  nextBlockFuture.join();
+		synchronized (service) {
+			orderNextBlock.run();
+		}
+		return block;
 
 	}
 
