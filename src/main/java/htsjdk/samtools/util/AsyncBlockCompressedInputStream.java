@@ -78,12 +78,14 @@ public class AsyncBlockCompressedInputStream
 		}
 		return nextBlockSync();
 	}
+	SerialExecutor service = new SerialExecutor(ForkJoinPool.commonPool());
 
 	Supplier<DecompressedBlock> fetchNextBlock = () -> {
-		return processNextBlock(freeBuffers.poll());
+		synchronized (service) {
+			return processNextBlock(freeBuffers.poll());
+		}
 	};
 
-	SerialExecutor service = new SerialExecutor(ForkJoinPool.commonPool());
 
 	Runnable orderNextBlock = () -> {
 		synchronized (service) {
