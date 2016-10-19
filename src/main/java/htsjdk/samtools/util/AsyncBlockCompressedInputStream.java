@@ -97,6 +97,7 @@ public class AsyncBlockCompressedInputStream
 	@Override
 	protected void prepareForSeek() {
 		synchronized (service) {
+			mResult.forEach(x -> x.cancel(true));
 			mResult.clear();
 			service.clear();
 			super.prepareForSeek();
