@@ -30,6 +30,8 @@ import htsjdk.samtools.seekablestream.SeekableBufferedStream;
 import htsjdk.samtools.seekablestream.SeekableFileStream;
 import htsjdk.samtools.seekablestream.SeekableHTTPStream;
 import htsjdk.samtools.seekablestream.SeekableStream;
+import htsjdk.samtools.util.cache.BAMBlockCell;
+import htsjdk.samtools.util.cache.BAMCache;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -40,7 +42,9 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /*
  * Utility class for reading BGZF block compressed files.  The caller can treat this file like any other InputStream.
@@ -59,7 +63,7 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
     private long mBlockAddress = 0;
     private int mLastBlockLength = 0;
     private final BlockGunzipper blockGunzipper = new BlockGunzipper();
-    private static ConcurrentHashMap<Long, Block> cache = new ConcurrentHashMap<>();
+    private static BAMCache cache = new BAMCache(new AtomicLong(100000));
 
 
     /**
@@ -365,9 +369,9 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
                 buffer[13] == BlockCompressedStreamConstants.BGZF_ID2);
     }
 
-    private static class Block {
-        byte[] buffer;
-        int unzipBlockSize;
+    public static class Block {
+        public byte[] buffer;
+        public int unzipBlockSize;
 
         final int hashcode;
 
@@ -396,22 +400,27 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
         throws IOException {
 
         long curPosition = 0;
+        Optional<BAMBlockCell.BAMBlockSlot> slot = null;
+
         if (mFile != null) {
             curPosition = mFile.position();
 
-            Block block;
-            if ((block = cache.get(curPosition)) != null) {
-//                System.out.printf("~Take from [%d] cache size (%d)\n", curPosition, block.unzipBlockSize);
-                mFile.seek(mFile.position() + block.unzipBlockSize);
+            if (curPosition != 0) {
+                BAMBlockCell cell = cache.observeCell(curPosition);
+                slot = cell.takeSlot();
+                if (!slot.isPresent()) {
+                    Block block = cell.data();
+                    mFile.seek(mFile.position() + block.unzipBlockSize);
 
-                mCurrentOffset = 0;
-                mBlockAddress += mLastBlockLength;
-                mLastBlockLength = block.unzipBlockSize;
+                    mCurrentOffset = 0;
+                    mBlockAddress += mLastBlockLength;
+                    mLastBlockLength = block.unzipBlockSize;
 
-                mCurrentBlock = new byte[block.buffer.length];
-                System.arraycopy(block.buffer, 0, mCurrentBlock, 0, block.buffer.length);
+                    mCurrentBlock = new byte[block.buffer.length];
+                    System.arraycopy(block.buffer, 0, mCurrentBlock, 0, block.buffer.length);
 
-                return;
+                    return;
+                }
             }
         } else {
 //            System.out.printf("~warn mFile is null\n");
@@ -448,7 +457,7 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
 
         if (mFile != null && curPosition != 0) {
 //            System.out.printf("~Put to cache (from %d of size %d)\n", curPosition, blockLength);
-            cache.putIfAbsent(curPosition, new Block(Arrays.copyOf(mCurrentBlock, mCurrentBlock.length), blockLength));
+            slot.get().putBlock(new Block(Arrays.copyOf(mCurrentBlock, mCurrentBlock.length), blockLength));
         }
     }
 
