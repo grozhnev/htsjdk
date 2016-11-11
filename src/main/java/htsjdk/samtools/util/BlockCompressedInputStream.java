@@ -40,6 +40,7 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
+import java.util.concurrent.ConcurrentHashMap;
 
 /*
  * Utility class for reading BGZF block compressed files.  The caller can treat this file like any other InputStream.
@@ -58,6 +59,7 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
     private long mBlockAddress = 0;
     private int mLastBlockLength = 0;
     private final BlockGunzipper blockGunzipper = new BlockGunzipper();
+    private static ConcurrentHashMap<Long, Block> cache = new ConcurrentHashMap<>();
 
 
     /**
@@ -363,9 +365,59 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
                 buffer[13] == BlockCompressedStreamConstants.BGZF_ID2);
     }
 
+    private static class Block {
+        byte[] buffer;
+        int unzipBlockSize;
+
+        final int hashcode;
+
+        Block(byte[] buffer, int realSize) {
+            this.buffer = buffer;
+            this.unzipBlockSize = realSize;
+
+            hashcode = Arrays.hashCode(buffer) + realSize;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            final boolean b = Arrays.equals(buffer, ((Block) obj).buffer)
+                    && unzipBlockSize == ((Block) obj).unzipBlockSize;
+            System.out.printf("~equals (%b)\n", b);
+            return b;
+        }
+
+        @Override
+        public int hashCode() {
+            return hashcode;
+        }
+    }
+
     private void readBlock()
         throws IOException {
 
+        long curPosition = 0;
+        if (mFile != null) {
+            curPosition = mFile.position();
+
+            Block block;
+            if ((block = cache.get(curPosition)) != null) {
+//                System.out.printf("~Take from [%d] cache size (%d)\n", curPosition, block.unzipBlockSize);
+                mFile.seek(mFile.position() + block.unzipBlockSize);
+
+                mCurrentOffset = 0;
+                mBlockAddress += mLastBlockLength;
+                mLastBlockLength = block.unzipBlockSize;
+
+                mCurrentBlock = new byte[block.buffer.length];
+                System.arraycopy(block.buffer, 0, mCurrentBlock, 0, block.buffer.length);
+
+                return;
+            }
+        } else {
+//            System.out.printf("~warn mFile is null\n");
+        }
+
+//        System.out.printf("~Read block from %d\n", curPosition);
         if (mFileBuffer == null) {
             mFileBuffer = new byte[BlockCompressedStreamConstants.MAX_COMPRESSED_BLOCK_SIZE];
         }
@@ -393,6 +445,11 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
         mCurrentOffset = 0;
         mBlockAddress += mLastBlockLength;
         mLastBlockLength = blockLength;
+
+        if (mFile != null && curPosition != 0) {
+//            System.out.printf("~Put to cache (from %d of size %d)\n", curPosition, blockLength);
+            cache.putIfAbsent(curPosition, new Block(Arrays.copyOf(mCurrentBlock, mCurrentBlock.length), blockLength));
+        }
     }
 
     private void inflateBlock(final byte[] compressedBlock, final int compressedLength)

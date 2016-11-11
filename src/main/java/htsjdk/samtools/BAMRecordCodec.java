@@ -197,9 +197,17 @@ public class BAMRecordCodec implements SortingCollection.Codec<SAMRecord> {
         final int insertSize = this.binaryCodec.readInt();
         final byte[] restOfRecord = new byte[recordLength - BAMFileConstants.FIXED_BLOCK_SIZE];
         this.binaryCodec.readBytes(restOfRecord);
-        final BAMRecord ret = this.samRecordFactory.createBAMRecord(
-                header, referenceID, coordinate, readNameLength, mappingQuality,
-                bin, cigarLen, flags, readLen, mateReferenceID, mateCoordinate, insertSize, restOfRecord);
+
+        BAMRecord ret;
+        try {
+            ret = this.samRecordFactory.createBAMRecord(
+                    header, referenceID, coordinate, readNameLength, mappingQuality,
+                    bin, cigarLen, flags, readLen, mateReferenceID, mateCoordinate, insertSize, restOfRecord);
+        } catch (IllegalArgumentException e) {
+            System.out.printf("BAMRecord: referenceID=%d, coordinate=%d, readNameLength=%d, mappingQuality=%d, bin=%d, cigarLen=%d, flags=%d, readLen=%d, mateReferenceID=%d, mateCoordinate=%d, insertSize=%d\n", referenceID, coordinate, readNameLength, mappingQuality,
+                    bin, cigarLen, flags, readLen, mateReferenceID, mateCoordinate, insertSize);
+            throw new RuntimeException(e);
+        }
 
         if (null != header) {
             // don't reset a null header as this will clobber the reference and mate reference indices
