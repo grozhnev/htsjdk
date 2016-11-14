@@ -24,6 +24,7 @@
 package htsjdk.samtools.util;
 
 
+import htsjdk.samtools.Defaults;
 import htsjdk.samtools.FileTruncatedException;
 import htsjdk.samtools.SAMException;
 import htsjdk.samtools.seekablestream.SeekableBufferedStream;
@@ -43,7 +44,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /*
@@ -63,7 +63,7 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
     private long mBlockAddress = 0;
     private int mLastBlockLength = 0;
     private final BlockGunzipper blockGunzipper = new BlockGunzipper();
-    private static BAMCache cache = new BAMCache(new AtomicLong(100000));
+    private static BAMCache cache = new BAMCache(new AtomicLong(Defaults.CACHE_SIZE * 1024 / 64));
 
 
     /**

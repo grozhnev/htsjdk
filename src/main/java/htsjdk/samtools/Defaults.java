@@ -84,8 +84,11 @@ public class Defaults {
      */
     public static final boolean SRA_LIBRARIES_DOWNLOAD;
 
+    public static long CACHE_SIZE;
+
 
     static {
+        CACHE_SIZE = getIntProperty("cache_size", 128);
         CREATE_INDEX = getBooleanProperty("create_index", false);
         CREATE_MD5 = getBooleanProperty("create_md5", false);
         USE_ASYNC_IO_READ_FOR_SAMTOOLS = getBooleanProperty("use_async_io_read_samtools", false);
@@ -126,6 +129,7 @@ public class Defaults {
         result.put("EBI_REFERENCE_SERVICE_URL_MASK", EBI_REFERENCE_SERVICE_URL_MASK);
         result.put("CUSTOM_READER_FACTORY", CUSTOM_READER_FACTORY);
         result.put("SAM_FLAG_FIELD_FORMAT", SAM_FLAG_FIELD_FORMAT);
+        result.put("CACHE_SIZE", CACHE_SIZE);
         return Collections.unmodifiableSortedMap(result);
     }
 
