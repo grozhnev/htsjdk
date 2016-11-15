@@ -84,11 +84,10 @@ public class Defaults {
      */
     public static final boolean SRA_LIBRARIES_DOWNLOAD;
 
+    public static boolean USE_ITERATOR_CACHING;
     public static long CACHE_SIZE;
 
-
     static {
-        CACHE_SIZE = getIntProperty("cache_size", 128);
         CREATE_INDEX = getBooleanProperty("create_index", false);
         CREATE_MD5 = getBooleanProperty("create_md5", false);
         USE_ASYNC_IO_READ_FOR_SAMTOOLS = getBooleanProperty("use_async_io_read_samtools", false);
@@ -107,6 +106,8 @@ public class Defaults {
         CUSTOM_READER_FACTORY = getStringProperty("custom_reader", "");
         SAM_FLAG_FIELD_FORMAT = SamFlagField.valueOf(getStringProperty("sam_flag_field_format", SamFlagField.DECIMAL.name()));
         SRA_LIBRARIES_DOWNLOAD = getBooleanProperty("sra_libraries_download", false);
+        USE_ITERATOR_CACHING = getBooleanProperty("cram_caching", true);
+        CACHE_SIZE = getIntProperty("cache_size", 128);
     }
 
     /**

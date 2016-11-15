@@ -31,8 +31,7 @@ import htsjdk.samtools.seekablestream.SeekableBufferedStream;
 import htsjdk.samtools.seekablestream.SeekableFileStream;
 import htsjdk.samtools.seekablestream.SeekableHTTPStream;
 import htsjdk.samtools.seekablestream.SeekableStream;
-import htsjdk.samtools.util.cache.BAMBlockCell;
-import htsjdk.samtools.util.cache.BAMCache;
+import htsjdk.samtools.util.cache.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -44,7 +43,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 
 /*
  * Utility class for reading BGZF block compressed files.  The caller can treat this file like any other InputStream.
@@ -55,6 +53,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * c.f. http://samtools.sourceforge.net/SAM1.pdf for details of BGZF format
  */
 public class BlockCompressedInputStream extends InputStream implements LocationAware {
+
+    private final static CacheService cacheService = Defaults.USE_ITERATOR_CACHING ? CacheService.instance() : null;
+
     private InputStream mStream = null;
     private SeekableStream mFile = null;
     private byte[] mFileBuffer = null;
@@ -63,8 +64,8 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
     private long mBlockAddress = 0;
     private int mLastBlockLength = 0;
     private final BlockGunzipper blockGunzipper = new BlockGunzipper();
-    private static BAMCache cache = new BAMCache(new AtomicLong(Defaults.CACHE_SIZE * 1024 / 64));
 
+    private Cache<Long, BlockCompressedInputStream.Block> cache;
 
     /**
      * Note that seek() is not supported if this ctor is used.
@@ -94,12 +95,13 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
         throws IOException {
         mFile = new SeekableFileStream(file);
         mStream = null;
-
+        grabCacheForSource(mFile.getSource());
     }
 
     public BlockCompressedInputStream(final URL url) {
         mFile = new SeekableBufferedStream(new SeekableHTTPStream(url));
         mStream = null;
+        grabCacheForSource(mFile.getSource());
     }
 
     /**
@@ -110,6 +112,25 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
     public BlockCompressedInputStream(final SeekableStream strm) {
         mFile = strm;
         mStream = null;
+        grabCacheForSource(mFile.getSource());
+    }
+
+    private void grabCacheForSource(String alias) {
+        if (Defaults.USE_ITERATOR_CACHING) {
+            synchronized (cacheService) {
+                Cache<Long, Block> grabbedCache = cacheService.getCache(alias, Long.class, Block.class);
+                if (grabbedCache == null) {
+                    this.cache = cacheService.createCache(
+                            mFile.getSource(),
+                            Long.class,
+                            Block.class,
+                            (int) (Defaults.CACHE_SIZE * 1024 / 64)
+                    );
+                } else {
+                    this.cache = grabbedCache;
+                }
+            }
+        }
     }
 
     /**
@@ -396,37 +417,28 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
         }
     }
 
-    private void readBlock()
-        throws IOException {
+    private void readBlock() throws IOException {
 
-        long curPosition = 0;
-        Optional<BAMBlockCell.BAMBlockSlot> slot = null;
+        Optional<Cell<Block>.Slot> slot = Optional.empty();
+        if (mFile != null && cache != null) {
+            long curPosition = mFile.position();
 
-        if (mFile != null) {
-            curPosition = mFile.position();
+            Cell<BlockCompressedInputStream.Block> cell = cache.grabCell(curPosition);
+            slot = cell.takeSlot();
+            if (!slot.isPresent()) {
+                Block block = cell.getValue();
+                mFile.seek(mFile.position() + block.unzipBlockSize);
 
-            if (curPosition != 0) {
-                BAMBlockCell cell = cache.observeCell(curPosition);
-                slot = cell.takeSlot();
-                if (!slot.isPresent()) {
-                    Block block = cell.data();
-                    mFile.seek(mFile.position() + block.unzipBlockSize);
+                mCurrentOffset = 0;
+                mBlockAddress += mLastBlockLength;
+                mLastBlockLength = block.unzipBlockSize;
 
-                    mCurrentOffset = 0;
-                    mBlockAddress += mLastBlockLength;
-                    mLastBlockLength = block.unzipBlockSize;
-
-                    mCurrentBlock = new byte[block.buffer.length];
-                    System.arraycopy(block.buffer, 0, mCurrentBlock, 0, block.buffer.length);
-
-                    return;
-                }
+                mCurrentBlock = new byte[block.buffer.length];
+                System.arraycopy(block.buffer, 0, mCurrentBlock, 0, block.buffer.length);
+                return;
             }
-        } else {
-//            System.out.printf("~warn mFile is null\n");
         }
 
-//        System.out.printf("~Read block from %d\n", curPosition);
         if (mFileBuffer == null) {
             mFileBuffer = new byte[BlockCompressedStreamConstants.MAX_COMPRESSED_BLOCK_SIZE];
         }
@@ -455,9 +467,10 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
         mBlockAddress += mLastBlockLength;
         mLastBlockLength = blockLength;
 
-        if (mFile != null && curPosition != 0) {
-//            System.out.printf("~Put to cache (from %d of size %d)\n", curPosition, blockLength);
-            slot.get().putBlock(new Block(Arrays.copyOf(mCurrentBlock, mCurrentBlock.length), blockLength));
+        if (mFile != null && cache != null) {
+            //we sure that slot isn't empty because if it's empty, we will process other code branch
+            //noinspection OptionalGetWithoutIsPresent
+            slot.get().store(new Block(Arrays.copyOf(mCurrentBlock, mCurrentBlock.length), blockLength));
         }
     }
 
