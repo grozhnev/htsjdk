@@ -84,7 +84,7 @@ public class Defaults {
      */
     public static final boolean SRA_LIBRARIES_DOWNLOAD;
 
-    public static boolean USE_ITERATOR_CACHING;
+    public static boolean BAM_CACHING;
     public static long CACHE_SIZE;
 
     static {
@@ -106,7 +106,7 @@ public class Defaults {
         CUSTOM_READER_FACTORY = getStringProperty("custom_reader", "");
         SAM_FLAG_FIELD_FORMAT = SamFlagField.valueOf(getStringProperty("sam_flag_field_format", SamFlagField.DECIMAL.name()));
         SRA_LIBRARIES_DOWNLOAD = getBooleanProperty("sra_libraries_download", false);
-        USE_ITERATOR_CACHING = getBooleanProperty("cram_caching", true);
+        BAM_CACHING = getBooleanProperty("bam_caching", true);
         CACHE_SIZE = getIntProperty("cache_size", 128);
     }
 
@@ -130,6 +130,7 @@ public class Defaults {
         result.put("EBI_REFERENCE_SERVICE_URL_MASK", EBI_REFERENCE_SERVICE_URL_MASK);
         result.put("CUSTOM_READER_FACTORY", CUSTOM_READER_FACTORY);
         result.put("SAM_FLAG_FIELD_FORMAT", SAM_FLAG_FIELD_FORMAT);
+        result.put("BAM_CACHING", BAM_CACHING);
         result.put("CACHE_SIZE", CACHE_SIZE);
         return Collections.unmodifiableSortedMap(result);
     }

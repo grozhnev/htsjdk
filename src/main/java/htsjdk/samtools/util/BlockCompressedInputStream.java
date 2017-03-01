@@ -54,7 +54,7 @@ import java.util.Optional;
  */
 public class BlockCompressedInputStream extends InputStream implements LocationAware {
 
-    private final static CacheService cacheService = Defaults.USE_ITERATOR_CACHING ? CacheService.instance() : null;
+    private final static CacheService cacheService = Defaults.BAM_CACHING ? CacheService.instance() : null;
 
     private InputStream mStream = null;
     private SeekableStream mFile = null;
@@ -116,7 +116,7 @@ public class BlockCompressedInputStream extends InputStream implements LocationA
     }
 
     private void grabCacheForSource(String alias) {
-        if (Defaults.USE_ITERATOR_CACHING) {
+        if (Defaults.BAM_CACHING) {
             synchronized (cacheService) {
                 Cache<Long, Block> grabbedCache = cacheService.getCache(alias, Long.class, Block.class);
                 if (grabbedCache == null) {
