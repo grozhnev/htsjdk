@@ -917,8 +917,7 @@ public class IOUtil {
 
     /** Tokenizes the provided input stream into memory using the given delimiter. */
     private static List<String> tokenSlurp(final InputStream is, final Charset charSet, final String delimiterPattern) {
-        try {
-            final Scanner s = new Scanner(is, charSet.toString()).useDelimiter(delimiterPattern);
+        try (final Scanner s = new Scanner(is, charSet.toString()).useDelimiter(delimiterPattern)) {
             final LinkedList<String> tokens = new LinkedList<String>();
             while (s.hasNext()) {
                 tokens.add(s.next());

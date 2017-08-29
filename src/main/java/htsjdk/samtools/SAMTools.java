@@ -25,6 +25,7 @@ package htsjdk.samtools;
 
 
 import htsjdk.samtools.util.CloseableIterator;
+import htsjdk.samtools.util.CloserUtil;
 
 import java.io.File;
 
@@ -117,6 +118,7 @@ public class SAMTools {
             System.out.println(record.getSAMString());
         }
         iterator.close();
+        CloserUtil.close(reader);
         return 0;
     }
 }

@@ -279,4 +279,15 @@ public class ReferenceSource implements CRAMReferenceSource {
     public void setDownloadTriesBeforeFailing(final int downloadTriesBeforeFailing) {
         this.downloadTriesBeforeFailing = downloadTriesBeforeFailing;
     }
+
+    public void closeSource(){
+        try {
+            if (rsFile != null){
+                rsFile.close();
+            }
+        }
+        catch(final IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

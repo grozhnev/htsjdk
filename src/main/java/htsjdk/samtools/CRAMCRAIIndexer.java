@@ -111,10 +111,8 @@ public class CRAMCRAIIndexer {
      */
     public static CRAIIndex readIndex(final InputStream is) {
         CRAIIndex craiIndex = new CRAIIndex();
-        Scanner scanner = null;
 
-        try {
-            scanner = new Scanner(new GZIPInputStream(is));
+        try (Scanner scanner = new Scanner(new GZIPInputStream(is))) {
             while (scanner.hasNextLine()) {
                 final String line = scanner.nextLine();
                 craiIndex.addEntry(new CRAIEntry(line));
@@ -122,11 +120,6 @@ public class CRAMCRAIIndexer {
         }
         catch (IOException e) {
             throw new RuntimeIOException("Error reading CRAI index from output stream");
-        }
-        finally {
-            if (null != scanner) {
-                scanner.close();
-            }
         }
 
         return craiIndex;

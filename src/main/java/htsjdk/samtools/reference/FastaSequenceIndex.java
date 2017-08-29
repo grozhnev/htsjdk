@@ -128,8 +128,7 @@ public class FastaSequenceIndex implements Iterable<FastaSequenceIndexEntry> {
      * @throws IOException Thrown if file could not be opened.
      */
     private void parseIndexFile(Path indexFile) {
-        try {
-            Scanner scanner = new Scanner(indexFile);
+        try (Scanner scanner = new Scanner(indexFile)){
             int sequenceIndex = 0;
             while( scanner.hasNext() ) {
                 // Tokenize and validate the index line.
@@ -154,7 +153,6 @@ public class FastaSequenceIndex implements Iterable<FastaSequenceIndexEntry> {
                 // Build sequence structure
                 add(new FastaSequenceIndexEntry(contig,location,size,basesPerLine,bytesPerLine, sequenceIndex++) );
             }
-            scanner.close();
         } catch (IOException e) {
             throw new SAMException("Fasta index file could not be opened: " + indexFile, e);
 

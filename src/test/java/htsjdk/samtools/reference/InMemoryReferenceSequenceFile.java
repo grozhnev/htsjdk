@@ -60,7 +60,9 @@ public class InMemoryReferenceSequenceFile implements
     @Override
     public void close() throws IOException {
         map.clear();
-        index.clear();
+        if (index!=null) {
+            index.clear();
+        }
         current = 0;
     }
 }
