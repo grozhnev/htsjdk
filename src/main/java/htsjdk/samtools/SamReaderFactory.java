@@ -185,6 +185,7 @@ public abstract class SamReaderFactory {
     private static class SamReaderFactoryImpl extends SamReaderFactory {
         private final static Log LOG = Log.getInstance(SamReaderFactory.class);
         private final EnumSet<Option> enabledOptions;
+        private final String STDIN_INPUT_TOKEN = "/dev/stdin";
         private ValidationStringency validationStringency;
         private boolean asynchronousIO = Defaults.USE_ASYNC_IO_READ_FOR_SAMTOOLS;
         private SAMRecordFactory samRecordFactory;
@@ -202,12 +203,17 @@ public abstract class SamReaderFactory {
    
         @Override
         public SamReader open(final File file) {
-            final SamInputResource r = SamInputResource.of(file);
+            final SamInputResource r = stdinOrFile(file);
             final File indexMaybe = SamFiles.findIndex(file);
             if (indexMaybe != null) r.index(indexMaybe);
             return open(r);
         }
 
+        private SamInputResource stdinOrFile(final File file) {
+            return file.getPath().startsWith(STDIN_INPUT_TOKEN) 
+                         ? SamInputResource.of(SamInputResource.of(file).data().asUnbufferedInputStream()) 
+                         : SamInputResource.of(file);
+        }
 
         @Override
         public ValidationStringency validationStringency() {
