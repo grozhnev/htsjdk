@@ -99,6 +99,8 @@ public class SortingLongCollection {
     // For disk-based iteration
     private PriorityQueue<PeekFileValueIterator> priorityQueue;
 
+    private final Log log = Log.getInstance(SortingLongCollection.class);
+
     /**
      * Prepare to accumulate values to be sorted
      *
@@ -174,6 +176,7 @@ public class SortingLongCollection {
      * Sort the values in memory, write them to a file, and clear the buffer of values in memory.
      */
     private void spillToDisk() {
+        logSpillToDisk();
 
         try {
             Arrays.sort(this.ramValues, 0, this.numValuesInRam);
@@ -199,6 +202,13 @@ public class SortingLongCollection {
         } catch (IOException e) {
             throw new RuntimeIOException(e);
         }
+    }
+
+    private void logSpillToDisk() {
+        final String logMessage = "\n`nonProperlyMappedPairDuplicatesNames` SPILL COLLECTION ON A DISC from " +
+                                  "`SortingLongCollection` class.\n";
+        log.info(logMessage);
+        System.out.println(logMessage);
     }
 
     /**

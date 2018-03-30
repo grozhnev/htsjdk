@@ -131,6 +131,8 @@ public class SortingCollection<T> implements Iterable<T> {
 
     private TempStreamFactory tempStreamFactory = new TempStreamFactory();
 
+    private final Log log = Log.getInstance(SortingCollection.class);
+
     /**
      * Prepare to accumulate records to be sorted
      * @param componentType Class of the record to be sorted.  Necessary because of Java generic lameness.
@@ -216,6 +218,8 @@ public class SortingCollection<T> implements Iterable<T> {
      * Sort the records in memory, write them to a file, and clear the buffer of records in memory.
      */
     public void spillToDisk() {
+        logSpillToDisk();
+
         try {
             Arrays.sort(this.ramRecords, 0, this.numRecordsInRam, this.comparator);
             final Path f = newTempFile();
@@ -246,6 +250,13 @@ public class SortingCollection<T> implements Iterable<T> {
         catch (IOException e) {
             throw new RuntimeIOException(e);
         }
+    }
+
+    private void logSpillToDisk() {
+        final String logMessage = "\n`nonProperlyMappedPairDuplicatesNames` SPILL COLLECTION ON A DISC from " +
+                                  "`SortingCollection` class.\n";
+        log.info(logMessage);
+        System.out.println(logMessage);
     }
 
     /**

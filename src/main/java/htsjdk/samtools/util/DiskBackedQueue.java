@@ -75,6 +75,7 @@ public class DiskBackedQueue<E> implements Queue<E> {
      */
     private final SortingCollection.Codec<E> codec;
 
+    private final Log log = Log.getInstance(DiskBackedQueue.class);
 
     /**
      * Prepare to accumulate records
@@ -265,6 +266,8 @@ public class DiskBackedQueue<E> implements Queue<E> {
      * @throws RuntimeIOException
      */
     private void spillToDisk(final E record) throws RuntimeIOException {
+        logSpillToDisk();
+
         try {
             if (this.diskRecords == null) {
                 this.diskRecords = newTempFile();
@@ -277,6 +280,13 @@ public class DiskBackedQueue<E> implements Queue<E> {
         } catch (final IOException e) {
             throw new RuntimeIOException("Problem writing temporary file. Try setting TMP_DIR to a file system with lots of space.", e);
         }
+    }
+
+    private void logSpillToDisk() {
+        final String logMessage = "\n`nonProperlyMappedPairDuplicatesNames` SPILL COLLECTION ON A DISC from " +
+                                  "`DiskBackedQueue` class.\n";
+        log.info(logMessage);
+        System.out.println(logMessage);
     }
 
     /**
